@@ -1,14 +1,20 @@
-import numpy as np
+import os
+
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+
+print("XLA DISABLED BEFORE TF IMPORT")
+
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use("Agg")
 from tensorflow import keras
 from mpl_toolkits.axes_grid1 import ImageGrid
 import tensorflow as tf
-import math
-from create_data import *
+
+from data.post_interpolation.lbbb.npy_stacked_15.create_data import *
 import cv2
-from test_model import SSIMLoss
 from skimage import metrics
-from scipy.ndimage import median_filter
 
 
 def save_error():

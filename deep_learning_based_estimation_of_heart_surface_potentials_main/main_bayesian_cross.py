@@ -1,10 +1,5 @@
 # Set seed values to remove randomness from that
 seed_value= 0
-import os
-os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ['PYTHONHASHSEED']=str(seed_value)
 import random
 random.seed(seed_value)
 import numpy as np
@@ -12,32 +7,24 @@ np.random.seed(seed_value)
 import tensorflow as tf
 tf.random.set_seed(seed_value)
 
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold
 from tensorflow.keras.callbacks import EarlyStopping
 from bayes_opt import BayesianOptimization
-from bayes_opt.util import UtilityFunction
 import gc
 import logging
-from numpy import load
 from numpy import zeros
 from numpy import ones
 from numpy.random import randint
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l1
-import tensorflow.keras.backend as K
 from keras.initializers import RandomNormal
 from keras.models import Model
 from keras.layers import Layer, Conv2D, Conv2DTranspose, LeakyReLU, Activation, Concatenate, Dropout, BatchNormalization, AveragePooling2D, MaxPooling2D, UpSampling2D, ReLU, Dense, Input
-
-from tensorflow.keras.utils import plot_model
-
-from show_data import *
-from UNet import get_unet_adapted, get_unet
-from UnetIncept import build_unet_inception_2
-from correlation_calculator import calculate_ssim_data, calculate_pcc_data, calculate_mae_dataset, visualize_boxplot
-
+from deep_learning_based_estimation_of_heart_surface_potentials_main.show_data import *
+from deep_learning_based_estimation_of_heart_surface_potentials_main.UNet import get_unet_adapted
+import gc
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import numpy as np
 
 
 def ssim_loss(y_true, y_pred):
@@ -169,15 +156,25 @@ def define_gan(g_model, d_model, image_shape, regularization_w=0.01, ssim_l1_r=5
             layer.trainable = False
 
     in_src = Input(shape=image_shape)
+    entropy_input = Input(shape=(1,))
     # connect the source image to the generator input
     gen_out = g_model(in_src)
     
     # connect the source input and generator output to the discriminator input
     # print(in_src, gen_out)
+
+    in_src = Input(shape=image_shape)
+
+    gen_out = g_model(in_src)
+
+    if isinstance(gen_out, list):
+        gen_out = gen_out[0]
+
+
     dis_out = d_model([in_src, gen_out])
 
     # src image as input, discriminator classification and generated image as output
-    model = Model(in_src, [dis_out, gen_out])
+    model = Model([in_src, entropy_input],[dis_out, gen_out])
 
     # Add L1 regularization to the generator's Conv2D layers
     l1_strength = regularization_w  # You can adjust the regularization strength

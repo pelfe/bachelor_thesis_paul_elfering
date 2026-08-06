@@ -24,7 +24,6 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
 
     return x
 
-
 def inception_block(input_tensor, n_filters, batchnorm):
     direct = Conv2D(n_filters, (1, 1), padding='same', activation='relu')(input_tensor)
     if batchnorm:

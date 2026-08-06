@@ -1,5 +1,14 @@
+import os
+
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "0"
+
+print("XLA DISABLED BEFORE TF IMPORT")
+
+
+
 import matplotlib.pyplot as plt
-from .create_data import *
+from data.post_interpolation.lbbb.npy_stacked_15.create_data import *
 import tensorflow as tf
 
 
@@ -38,7 +47,7 @@ def train_model(model, flattened, chest_img_size, heart_img_size, epochs=10, dat
     return history
 
 
-def get_mse_data(model, x, y, heart_img_size=32):
+def get_mse_data(model, x, y, heart_img_size=64):
     predicted = model.predict(x)
 
     predicted = predicted.reshape((predicted.shape[0], heart_img_size, heart_img_size))
@@ -49,7 +58,7 @@ def get_mse_data(model, x, y, heart_img_size=32):
     return mse
 
 
-def test_model(model, test_X, test_y, chest_img_size=32, heart_img_size=32):
+def test_model(model, test_X, test_y, chest_img_size=64, heart_img_size=64):
     predicted = model.predict(test_X)
 
     predicted = predicted.reshape((predicted.shape[0], heart_img_size, heart_img_size))

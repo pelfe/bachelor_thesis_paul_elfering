@@ -1,12 +1,11 @@
-import os
-import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, \
     MaxPool2D, Conv2DTranspose, Input, Activation, \
     Concatenate, CenterCrop, BatchNormalization, MaxPooling2D,\
     Dropout, concatenate, UpSampling2D, AveragePooling2D, Conv3D, Add, Multiply, Permute, Softmax
 from tensorflow.keras import Model
-from test_model import *
-from show_data import *
+
+from deep_learning_based_estimation_of_heart_surface_potentials_main.test_model import *
+from deep_learning_based_estimation_of_heart_surface_potentials_main.show_data import *
 
 img_dim = 32
 epochs = 10
