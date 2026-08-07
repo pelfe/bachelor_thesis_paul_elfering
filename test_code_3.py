@@ -26,7 +26,7 @@ from tensorflow.keras.layers import BatchNormalization
 
 MODEL_PATH = (
     "data/models/pauls_models/"
-    "test2/discriminator.keras"
+    "mixed_15stacks_gan/discriminator.keras"
 )
 
 X_PATH = (
@@ -99,6 +99,34 @@ for layer in conv_layers:
     )
 
 # =====================================================
+# LOAD GENERATOR AND CREATE FAKE SAMPLES
+# =====================================================
+
+GENERATOR_PATH = (
+    "data/models/pauls_models/"
+    "mixed_15stacks_gan/generator.keras"
+)
+
+generator = load_model(GENERATOR_PATH)
+
+fake = generator.predict(
+    x,
+    batch_size=BATCH_SIZE,
+    verbose=0
+)
+
+print("\nFake shape:", fake.shape)
+print(
+    "Fake range:",
+    fake.min(),
+    fake.max(),
+    fake.mean(),
+    fake.std()
+)
+
+
+
+# ====================================================
 # 1. NORMAL OUTPUT DISTRIBUTION
 # =====================================================
 
@@ -183,6 +211,34 @@ else:
     )
 
 
+# =====================================================
+# LOGITS TRAINING VS INFERENCE
+# =====================================================
+
+print("\n==============================")
+print(" LOGITS (TRAINING VS INFERENCE)")
+print("==============================")
+
+logit_model = Model(
+    inputs=model.inputs,
+    outputs=logit_layer.output
+)
+
+# Real
+real_logits_train = logit_model([x, y], training=True).numpy()
+real_logits_test  = logit_model([x, y], training=False).numpy()
+
+print("\nREAL LOGITS")
+print("Training mean :", real_logits_train.mean())
+print("Inference mean:", real_logits_test.mean())
+
+# Fake
+fake_logits_train = logit_model([x, fake], training=True).numpy()
+fake_logits_test  = logit_model([x, fake], training=False).numpy()
+
+print("\nFAKE LOGITS")
+print("Training mean :", fake_logits_train.mean())
+print("Inference mean:", fake_logits_test.mean())
 
 # =====================================================
 # 3. FINAL CONV WEIGHTS AND BIAS
@@ -295,38 +351,82 @@ for layer in model.layers:
         )
 
 
+
+
+
 # =====================================================
-# 6. TRAINING VS INFERENCE MODE
+# 6. TRAINING VS INFERENCE (REAL + FAKE)
 # =====================================================
 
 print("\n==============================")
 print(" TRAINING VS INFERENCE")
 print("==============================")
 
+# -----------------------------------------------------
+# Load generator
+# -----------------------------------------------------
 
-out_training = model(
-    [x,y],
+GENERATOR_PATH = (
+    "data/models/pauls_models/"
+    "mixed_15stacks_gan/generator.keras"
+)
+
+generator = load_model(GENERATOR_PATH)
+
+fake = generator.predict(
+    x,
+    batch_size=BATCH_SIZE,
+    verbose=0
+)
+
+# -----------------------------------------------------
+# REAL PAIRS
+# -----------------------------------------------------
+
+real_training = model(
+    [x, y],
     training=True
-)
+).numpy()
 
-out_inference = model(
-    [x,y],
+real_inference = model(
+    [x, y],
     training=False
-)
+).numpy()
+
+print("\nREAL PAIRS")
+print("Training mean :", real_training.mean())
+print("Inference mean:", real_inference.mean())
+
+print("Training percentiles:",
+      np.percentile(real_training, [0,1,25,50,75,99,100]))
+
+print("Inference percentiles:",
+      np.percentile(real_inference, [0,1,25,50,75,99,100]))
 
 
-print(
-    "training output mean:",
-    float(tf.reduce_mean(out_training))
-)
+# -----------------------------------------------------
+# FAKE PAIRS
+# -----------------------------------------------------
 
+fake_training = model(
+    [x, fake],
+    training=True
+).numpy()
 
-print(
-    "inference output mean:",
-    float(tf.reduce_mean(out_inference))
-)
+fake_inference = model(
+    [x, fake],
+    training=False
+).numpy()
 
+print("\nFAKE PAIRS")
+print("Training mean :", fake_training.mean())
+print("Inference mean:", fake_inference.mean())
 
+print("Training percentiles:",
+      np.percentile(fake_training, [0,1,25,50,75,99,100]))
+
+print("Inference percentiles:",
+      np.percentile(fake_inference, [0,1,25,50,75,99,100]))
 
 # =====================================================
 # 7. ACTIVATION SATURATION

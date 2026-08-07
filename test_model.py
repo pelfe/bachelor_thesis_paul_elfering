@@ -32,8 +32,8 @@ import deep_learning_estimation_paul.test_functions_paul as test_functions_paul
 #test_functions_paul.create_metric_summary(subjects, data_path ,save_path, gan_model)
 
 
-generator1_path = "data/models/pauls_models/mixed_15stacks_gan_original_high_lr/generator.keras"
-discriminator1_path = "data/models/pauls_models/mixed_15stacks_gan_original_high_lr/discriminator.keras"
+generator1_path = "data/models/pauls_models/mixed_15stacks_gan/generator.keras"
+discriminator1_path = "data/models/pauls_models/mixed_15stacks_gan/discriminator.keras"
 generator_model1 = tf.keras.models.load_model(generator1_path)
 discriminator_model1 = tf.keras.models.load_model(discriminator1_path)
 
@@ -44,7 +44,7 @@ discriminator_model1 = tf.keras.models.load_model(discriminator1_path)
 
 
 subject_path = "data/post_interpolation/lbbb/npy_stacked_15/size64_subject"
-subject = "ECGiCRT17"
+subject = "L79"
 test_functions_paul.visualize_input_output_truth_error(
     [generator_model1],
     [discriminator_model1],

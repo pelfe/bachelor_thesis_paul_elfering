@@ -53,7 +53,6 @@ def define_gan(g_model, d_model, image_shape, regularization_w=0.01, ssim_l1_r=5
     # Discriminator weights should be updated separately
     d_model.trainable = False
 
-
     # connect source input and generator output to discriminator input
     in_src = Input(shape=image_shape)
     gen_out = g_model(in_src)
@@ -191,6 +190,234 @@ def load_subject(base_path, subject):
     y_entropy = np.load(y_entropy_path,mmap_mode="r")
 
     return x, y, x_entropy, y_entropy
+
+def snapshot_weights(model):
+    return {
+        w.name: w.numpy().copy()
+        for w in model.weights
+    }
+
+
+def compare_weights(before, after):
+
+    changes = []
+
+    for name in before:
+
+        if name in after:
+
+            diff = np.mean(
+                np.abs(
+                    before[name] - after[name]
+                )
+            )
+
+            changes.append(diff)
+
+    if len(changes)==0:
+        return np.nan
+
+    return np.mean(changes)
+
+
+
+def count_trainable(model):
+
+    print("\nTRAINABLE VARIABLES")
+
+    for w in model.trainable_weights:
+        print(
+            w.name,
+            w.shape
+        )
+
+    print(
+        "TOTAL:",
+        len(model.trainable_weights)
+    )
+
+def discriminator_health_check(d_model, g_model, X_realA, X_realB):
+
+    print("\n==============================")
+    print("DISCRIMINATOR HEALTH CHECK")
+    print("==============================")
+
+    fake = g_model.predict_on_batch(X_realA)
+
+    real_out = d_model.predict_on_batch(
+        [X_realA, X_realB]
+    )
+
+    fake_out = d_model.predict_on_batch(
+        [X_realA, fake]
+    )
+
+    print("Real D output:")
+    print(
+        "mean:",
+        real_out.mean(),
+        "min:",
+        real_out.min(),
+        "max:",
+        real_out.max()
+    )
+
+    print("Fake D output:")
+    print(
+        "mean:",
+        fake_out.mean(),
+        "min:",
+        fake_out.min(),
+        "max:",
+        fake_out.max()
+    )
+
+
+    print("\nGenerator output")
+    print(
+        "mean:",
+        fake.mean(),
+        "std:",
+        fake.std(),
+        "min:",
+        fake.min(),
+        "max:",
+        fake.max()
+    )
+
+    # saturation check
+    if real_out.mean()>0.95:
+        print("WARNING: discriminator dominates real")
+
+    if fake_out.mean()<0.05:
+        print("WARNING: discriminator dominates fake")
+
+    if fake.std()<0.01:
+        print("WARNING: generator collapse")
+
+
+def discriminator_gradient_test(d_model, X_realA, X_realB):
+
+    print("\n==============================")
+    print("DISCRIMINATOR GRADIENT TEST")
+    print("==============================")
+
+
+    y=np.ones(
+        (X_realA.shape[0],
+         d_model.output_shape[1],
+         d_model.output_shape[2],
+         1)
+    )
+
+
+    with tf.GradientTape() as tape:
+
+        pred=d_model(
+            [X_realA,X_realB],
+            training=True
+        )
+
+        loss=tf.keras.losses.binary_crossentropy(
+            y,
+            pred
+        )
+
+        loss=tf.reduce_mean(loss)
+
+
+    grads=tape.gradient(
+        loss,
+        d_model.trainable_variables
+    )
+
+
+    norms=[]
+
+    for g in grads:
+
+        if g is not None:
+            norms.append(
+                tf.norm(g).numpy()
+            )
+
+
+    print(
+        "Gradient mean:",
+        np.mean(norms)
+    )
+
+    print(
+        "Gradient max:",
+        np.max(norms)
+    )
+
+
+def check_gan_freeze(g_model,d_model,gan_model):
+
+    print("\n==============================")
+    print("FREEZE CHECK")
+    print("==============================")
+
+
+    print(
+        "D trainable:",
+        len(d_model.trainable_variables)
+    )
+
+
+    print(
+        "GAN trainable:",
+        len(gan_model.trainable_variables)
+    )
+
+
+    d_names=[
+        x.name
+        for x in d_model.trainable_variables
+    ]
+
+    gan_names=[
+        x.name
+        for x in gan_model.trainable_variables
+    ]
+
+
+    overlap=set(d_names).intersection(
+        set(gan_names)
+    )
+
+
+    print(
+        "D variables inside GAN:",
+        len(overlap)
+    )
+
+
+def check_weight_change(model, before):
+
+    after = {
+        w.name:w.numpy().copy()
+        for w in model.weights
+    }
+
+    diff=[]
+
+    for k in before:
+
+        if k in after:
+            diff.append(
+                np.mean(
+                    np.abs(
+                        before[k]-after[k]
+                    )
+                )
+            )
+
+    print(
+        "Average weight change:",
+        np.mean(diff)
+    )
 
 
 # -------------------------------------------------------
@@ -438,11 +665,10 @@ def train(
     # Enable discriminator training
     # -----------------------------
 
-    # discriminator
     d_model.trainable = True
     d_model.compile(
         optimizer=d_model.optimizer,
-        loss=d_model.loss
+        loss=d_model.loss,
     )
 
     history = {
@@ -503,32 +729,81 @@ def train(
             (X_realA, X_realB, input_entropy, output_entropy, class_labels) = train_generator[step]
 
             batch = X_realA.shape[0]
-            y_real = tf.ones((batch,n_patch,n_patch,1))
+            y_real = tf.ones((batch,n_patch,n_patch,1)) * 0.9
             y_fake = tf.zeros((batch,n_patch,n_patch,1))
             input_entropy_patch = tf.image.resize(input_entropy[..., None],(n_patch, n_patch), method="area")
             # --------------------------
             # Generate fake images
             # --------------------------
-            X_fakeB = g_model(X_realA, training=False)
+            X_fakeB = g_model.predict_on_batch(X_realA)
+            # ==================================================
+            # DEBUG FIRST BATCH ONLY
+            # ==================================================
+
+            # ==================================================
+            # ONE TIME DISCRIMINATOR DEBUG
+            # ==================================================
+
+            if step%1000 == 0:
+                check_gan_freeze(
+                    g_model,
+                    d_model,
+                    gan_model
+                )
+
+                discriminator_health_check(
+                    d_model,
+                    g_model,
+                    X_realA,
+                    X_realB
+                )
+
+                discriminator_gradient_test(
+                    d_model,
+                    X_realA,
+                    X_realB
+                )
+
+                fake = g_model.predict_on_batch(X_realA)
+
+                print("\nGENERATOR COLLAPSE CHECK")
+                print(
+                    "std:",
+                    fake.std()
+                )
 
             # --------------------------
             # Train discriminator real
             # --------------------------
 
             if use_acgan:
-                d_loss_real = d_model.train_on_batch([X_realA, X_realB], [y_real, class_labels])
-
+                d_loss_real = d_model.train_on_batch(
+                    [X_realA, X_realB],
+                    [y_real, class_labels]
+                )
             else:
-                d_loss_real = d_model.train_on_batch([X_realA, X_realB], y_real)
+
+
+                d_loss_real = d_model.train_on_batch(
+                    [X_realA, X_realB],
+                    y_real
+                )
+
 
             # --------------------------
             # Train discriminator fake
             # --------------------------
             if use_acgan:
-                d_loss_fake = d_model.train_on_batch([X_realA, X_fakeB], [y_fake, class_labels])
-
+                d_loss_fake = d_model.train_on_batch(
+                    [X_realA, X_fakeB],
+                    [y_fake, class_labels]
+                )
             else:
-                d_loss_fake = d_model.train_on_batch([X_realA, X_fakeB], y_fake)
+
+                d_loss_fake = d_model.train_on_batch(
+                    [X_realA, X_fakeB],
+                    y_fake
+                )
 
             # --------------------------
             # Train generator
@@ -643,4 +918,6 @@ def train(
         gc.collect()
 
     return history
+
+
 

@@ -20,8 +20,8 @@ T = 15                  # time window depth
 lambda1 = 100           # generator loss weight
 lambda2 = 0.01          # regularization weight
 alpha = 0.2             # loss balancing parameter
-learning_rate_discriminator = 0.001
-learning_rate_generator = 0.002
+learning_rate_discriminator = 0.0001
+learning_rate_generator = 0.0002
 dropout_ratio = 0.2     # dropout probability
 
 
@@ -244,6 +244,7 @@ g_model = train_model.get_unet_adapted(
     stack_count=input_shape[-1],
     conc_layers=[True,True,True,True]
 )
+
 d_model = discriminator_structures.define_1x1_patch_discriminator(
     input_shape,
     n_filters=32,
@@ -251,6 +252,7 @@ d_model = discriminator_structures.define_1x1_patch_discriminator(
     initial_lr=learning_rate_discriminator,
     decay_rate=0.96,
 )
+d_model.trainable = False
 gan_model = train_model.define_gan(
     g_model,
     d_model,
@@ -293,8 +295,8 @@ with open(save_dir+"/history.json","w") as f:
 
 
 model_name = "mixed_2x2patch_15stacks_gan"
-learning_rate_discriminator = 0.001
-learning_rate_generator = 0.002
+learning_rate_discriminator = 0.0001
+learning_rate_generator = 0.0002
 batch_size = 16
 train_subjects = [
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct1"),

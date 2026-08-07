@@ -4,7 +4,7 @@ from deep_learning_estimation_paul import visualize_model_functions as visualize
 #model_name = "mixed_15_stacks_gan"
 #history_path =
 history = visualize_model_history.load_history(
-    "data/models/pauls_models/test2/history.json")
+    "data/models/pauls_models/mixed_15stacks_gan/history.json")
 
 # Overview
 visualize_model_history.plot_training_overview(history)
