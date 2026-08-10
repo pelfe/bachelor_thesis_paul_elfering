@@ -1,2 +1,10 @@
 ﻿data4subj.zip
 data/
+deep_learning_based_estimation_of_heart_surface_potentials_main/__pycache__/__init__.cpython-310.pyc
+deep_learning_based_estimation_of_heart_surface_potentials_main/__pycache__/show_data.cpython-310.pyc
+deep_learning_based_estimation_of_heart_surface_potentials_main/__pycache__/test_model.cpython-310.pyc
+deep_learning_based_estimation_of_heart_surface_potentials_main/__pycache__/UNet.cpython-310.pyc
+deep_learning_estimation_paul/__pycache__/__init__.cpython-310.pyc
+deep_learning_estimation_paul/__pycache__/discriminator_structures.cpython-310.pyc
+deep_learning_estimation_paul/__pycache__/train_model_test.cpython-310.pyc
+deep_learning_estimation_paul/__pycache__/train_model.cpython-310.pyc

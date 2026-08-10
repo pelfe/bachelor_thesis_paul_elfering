@@ -430,8 +430,9 @@ def train(
         val_labels=None,
         epochs=10,
         batch_size=16,
-        discriminator_lr = 0.001,
-        generator_lr = 0.002,
+        discriminator_lr = 0.01,
+        generator_lr = 0.01,
+        label_smoothing = True,
         use_acgan=False):
 
     # -----------------------------
@@ -503,7 +504,9 @@ def train(
             (X_realA, X_realB, input_entropy, output_entropy, class_labels) = train_generator[step]
 
             batch = X_realA.shape[0]
-            y_real = tf.ones((batch,n_patch,n_patch,1)) * 0.9
+            y_real = tf.ones((batch,n_patch,n_patch,1))
+            if(label_smoothing):
+                y_real = y_real * 0.9
             y_fake = tf.zeros((batch,n_patch,n_patch,1))
             input_entropy_patch = tf.image.resize(input_entropy[..., None],(n_patch, n_patch), method="area")
             # --------------------------
