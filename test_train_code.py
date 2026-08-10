@@ -17,11 +17,11 @@ import deep_learning_estimation_paul.train_model_test as train_model
 import deep_learning_estimation_paul.discriminator_structures as discriminator_structures
 
 T = 15                  # time window depth
-lambda1 = 1           # generator loss weight
+lambda1 = 100           # generator loss weight
 lambda2 = 0.01          # regularization weight
 alpha = 0.2             # loss balancing parameter
-learning_rate_discriminator = 0.0001
-learning_rate_generator = 0.0002
+learning_rate_discriminator = 0.01
+learning_rate_generator = 0.01
 dropout_ratio = 0.2     # dropout probability
 
 # ======================================================
@@ -122,7 +122,8 @@ gan_model = train_model.define_gan(
     input_shape,
     regularization_w=lambda2,
     lambda1=lambda1,
-    alpha=alpha,)
+    alpha=alpha,
+    learning_rate= learning_rate_generator)
 
 # -------------------------------------------------------
 # Train
@@ -136,7 +137,7 @@ history = train_model.train(
     test_subjects,
     discriminator_lr = learning_rate_discriminator,
     generator_lr = learning_rate_generator,
-    epochs=2,
+    epochs=1,
     batch_size=batch_size,
 )
 

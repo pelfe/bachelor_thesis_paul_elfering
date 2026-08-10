@@ -20,15 +20,15 @@ T = 15                  # time window depth
 lambda1 = 100           # generator loss weight
 lambda2 = 0.01          # regularization weight
 alpha = 0.2             # loss balancing parameter
-learning_rate_discriminator = 0.0001
-learning_rate_generator = 0.0002
+learning_rate_discriminator = 0.01
+learning_rate_generator = 0.01
 dropout_ratio = 0.2     # dropout probability
 
 
 
 # ======================================================
 
-model_name = "mixed_15stacks_gan"
+model_name = "mixed_gan_labelsmoothing"
 batch_size = 16
 train_subjects = [
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct1"),
@@ -125,7 +125,7 @@ gan_model = train_model.define_gan(
     regularization_w=lambda2,
     lambda1=lambda1,
     alpha=alpha,
-)
+    learning_rate=learning_rate_generator)
 
 # -------------------------------------------------------
 # Train
@@ -159,10 +159,9 @@ with open(save_dir+"/history.json","w") as f:
 
 
 
-model_name = "mixed_15stacks_gan_original_high_lr"
-learning_rate_discriminator = 0.01
-learning_rate_generator = 0.01
+model_name = "mixed_gan_labelsmoothing_lowerlambda1"
 batch_size = 16
+lambda1 = 10           # generator loss weight
 train_subjects = [
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct1"),
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct2"),
@@ -260,7 +259,7 @@ gan_model = train_model.define_gan(
     regularization_w=lambda2,
     lambda1=lambda1,
     alpha=alpha,
-)
+    learning_rate=learning_rate_generator)
 
 # -------------------------------------------------------
 # Train
@@ -295,8 +294,7 @@ with open(save_dir+"/history.json","w") as f:
 
 
 model_name = "mixed_2x2patch_15stacks_gan"
-learning_rate_discriminator = 0.0001
-learning_rate_generator = 0.0002
+lambda1 = 100
 batch_size = 16
 train_subjects = [
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct1"),
@@ -393,7 +391,7 @@ gan_model = train_model.define_gan(
     regularization_w=lambda2,
     lambda1=lambda1,
     alpha=alpha,
-)
+    learning_rate=learning_rate_generator)
 
 # -------------------------------------------------------
 # Train

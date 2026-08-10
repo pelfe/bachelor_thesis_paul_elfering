@@ -83,6 +83,63 @@ def define_test_discriminator(image_shape, n_filters=32, activation='relu', init
 
 
 
+# define the discriminator model
+def define_1x1_patch_relu_discriminator(image_shape, n_filters=32, activation='relu', initial_lr=0.001, decay_rate = 0.96):
+    # weights init
+    init = RandomNormal(stddev=0.02)
+
+    in_src_image = Input(shape=image_shape)
+    in_target_image = Input(shape=image_shape)
+
+    # concatenate images channel-wise
+    merged = Concatenate()([in_src_image, in_target_image])
+
+    d = Conv2D(n_filters, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(merged)
+    d = Activation(activation)(d)#ReLU()(d)
+
+    d = Conv2D(n_filters * 2, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(d)
+    d = BatchNormalization()(d)
+    d = Activation(activation)(d)#ReLU()(d)
+
+    d = Conv2D(n_filters * 4, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(d)
+    d = BatchNormalization()(d)
+    d = Activation(activation)(d)#ReLU()(d)
+
+    d = Conv2D(n_filters * 8, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(d)
+    d = BatchNormalization()(d)
+    d = Activation(activation)(d)#ReLU()(d)
+
+    d = Conv2D(n_filters * 16, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(d)
+    d = BatchNormalization()(d)
+    d = Activation(activation)(d)#ReLU()(d)
+
+    # patch output
+    d = Conv2D(1, (2,2), padding='valid', kernel_initializer=init)(d)
+    patch_out = Activation('sigmoid')(d)
+    # define model
+    model = Model([in_src_image, in_target_image], patch_out)
+    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+    print(model.summary())
+
+    # initial learning rate
+    initial_learning_rate = initial_lr
+
+    # decay step and decay rate
+    decay_steps = 1000
+
+    # 创建学习率衰减策略
+    learning_rate_decay = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate,
+        decay_steps=decay_steps,
+        decay_rate=decay_rate,
+        staircase=False  # become smooth when setting to True
+    )
+
+    # compile model
+    opt = Adam(learning_rate=learning_rate_decay, beta_1=0.5)
+    model.compile(loss='binary_crossentropy', optimizer=opt, loss_weights=[0.5])
+    return model
+
 
 
 

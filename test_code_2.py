@@ -1,5 +1,9 @@
 import os
 
+# =====================================================
+# TF SETTINGS
+# =====================================================
+
 os.environ["TF_CUDNN_USE_AUTOTUNE"] = "0"
 os.environ["TF_USE_CUDNN_FRONTEND"] = "0"
 os.environ["TF_DETERMINISTIC_OPS"] = "1"
@@ -12,298 +16,304 @@ import tensorflow as tf
 tf.config.optimizer.set_jit(False)
 
 for gpu in tf.config.list_physical_devices("GPU"):
-    tf.config.experimental.set_memory_growth(gpu, True)
+    tf.config.experimental.set_memory_growth(
+        gpu,
+        True
+    )
 
+# =====================================================
+# IMPORTS
+# =====================================================
 
 import numpy as np
-from tensorflow.keras.models import load_model, Model
-from tensorflow.keras.layers import BatchNormalization
+import matplotlib.pyplot as plt
 
+from tensorflow.keras.models import load_model
+from scipy.interpolate import make_interp_spline
 
 # =====================================================
 # CONFIG
 # =====================================================
 
 MODEL_PATH = (
-    "data/models/external models/epoch-9"
+    "data/models/pauls_models/"
+    "mixed_15stacks_gan/discriminator.keras"
 )
 
 X_PATH = (
     "data/post_interpolation/healthy/"
-    "npy_stacked_11/size64_subjectct1_x.npy"
+    "npy_stacked_15/size64_subjectct1_x.npy"
 )
-
-Y_PATH = (
-    "data/post_interpolation/healthy/"
-    "npy_stacked_11/size64_subjectct1_y.npy"
-)
-
 
 BATCH_SIZE = 16
 
+# image dimensions
+HEIGHT = 64
+WIDTH = 64
 
-# =====================================================
-# LOAD SAVEDMODEL (KERAS 2)
-# =====================================================
+# number of fake images per variance
+N_TEST = 200
 
-print("Loading SavedModel...")
-
-model = load_model(
-    MODEL_PATH,
-    compile=False
+# variance values to test
+TEST_VARIANCES = np.linspace(
+    0.001,
+    10,
+    25
 )
 
-model.summary()
-
-
 # =====================================================
-# LOAD DATA
+# LOAD DISCRIMINATOR
 # =====================================================
 
-print("\nLoading data...")
+print("Loading discriminator...")
 
-x = np.load(X_PATH)
-y = np.load(Y_PATH)
+discriminator = load_model(
+    MODEL_PATH
+)
 
+discriminator.summary()
 
-print("x shape:", x.shape)
-print("y shape:", y.shape)
+# =====================================================
+# LOAD CONDITIONING IMAGE X
+# =====================================================
+
+print("\nLoading x...")
+
+x = np.load(
+    X_PATH
+)
 
 print(
-    "x:",
+    "x shape:",
+    x.shape
+)
+
+print(
+    "x range:",
     x.min(),
-    x.max(),
-    x.mean(),
-    x.std()
-)
-
-print(
-    "y:",
-    y.min(),
-    y.max(),
-    y.mean(),
-    y.std()
+    x.max()
 )
 
 
 # =====================================================
-# 1. LAYER WEIGHT ANALYSIS
+# CREATE CONTROLLED VARIANCE IMAGES
 # =====================================================
 
-print("\n==============================")
-print(" WEIGHT ANALYSIS")
-print("==============================")
+def create_images_with_variance(
+        variance,
+        n
+):
+    """
+    Creates fake images:
 
+    shape:
+        (n,64,64,1)
 
-for layer in model.layers:
+    values:
+        0-1
 
-    weights = layer.get_weights()
+    variance:
+        approximately controlled
+    """
 
-    if len(weights) == 0:
-        continue
+    CHANNELS = 15
 
-    kernel = weights[0]
-
-    print("\nLayer:", layer.name)
-
-    print(
-        "shape:",
-        kernel.shape
+    images = np.random.randn(
+        n,
+        HEIGHT,
+        WIDTH,
+        CHANNELS
     )
 
-    print(
-        "mean:",
-        kernel.mean()
+    # normalize variance to 1
+    images = (
+            images /
+            images.std()
     )
 
-    print(
-        "std:",
-        kernel.std()
+    # scale variance
+    images = (
+            images *
+            np.sqrt(variance)
     )
 
-    print(
-        "near zero:",
-        np.mean(np.abs(kernel)<1e-7)*100,
-        "%"
+    # center intensity
+    images = images + 0.5
+
+    # keep valid image range
+    images = np.clip(
+        images,
+        0,
+        1
+    )
+
+    return images.astype(
+        np.float32
     )
 
 
 # =====================================================
-# 2. CONV ACTIVATION ANALYSIS
+# RUN EXPERIMENT
 # =====================================================
 
-print("\n==============================")
-print(" CONV ACTIVATIONS")
-print("==============================")
+print("\nRunning variance experiment...")
 
+measured_variances = []
+mean_predictions = []
 
-conv_layers = [
-    l for l in model.layers
-    if isinstance(l, tf.keras.layers.Conv2D)
-]
-
-
-for layer in conv_layers:
-
-    intermediate = Model(
-        inputs=model.inputs,
-        outputs=layer.output
+for variance in TEST_VARIANCES:
+    print(
+        "\nTesting variance:",
+        variance
     )
 
-    out = intermediate.predict(
-        x,
+    # ---------------------------------
+    # generate fake y
+    # ---------------------------------
+
+    fake_y = create_images_with_variance(
+        variance,
+        N_TEST
+    )
+
+    # ---------------------------------
+    # select x samples
+    # ---------------------------------
+
+    x_batch = x[:N_TEST]
+
+    # ---------------------------------
+    # discriminator prediction
+    # ---------------------------------
+
+    prediction = discriminator.predict(
+        [
+            x_batch,
+            fake_y
+        ],
         batch_size=BATCH_SIZE,
         verbose=0
     )
 
+    # ---------------------------------
+    # calculate actual variance
+    # ---------------------------------
 
-    print("\nLayer:", layer.name)
+    image_variance = np.var(
+        fake_y,
+        axis=(1, 2, 3)
+    )
 
-    print(
-        "mean:",
-        out.mean()
+    avg_variance = (
+        image_variance.mean()
+    )
+
+    avg_prediction = (
+        prediction.mean()
+    )
+
+    measured_variances.append(
+        avg_variance
+    )
+
+    mean_predictions.append(
+        avg_prediction
     )
 
     print(
-        "std:",
-        out.std()
+        "Actual variance:",
+        avg_variance
     )
 
     print(
-        "min:",
-        out.min()
+        "Prediction:",
+        avg_prediction
     )
 
-    print(
-        "max:",
-        out.max()
-    )
-
-
-    # dead feature channels
-
-    if len(out.shape) == 4:
-
-        channel_activity = np.mean(
-            np.abs(out),
-            axis=(0,1,2)
-        )
-
-        dead_channels = np.sum(
-            channel_activity < 1e-7
-        )
-
-        print(
-            "dead channels:",
-            dead_channels,
-            "/",
-            len(channel_activity)
-        )
-
-
 # =====================================================
-# 3. DISCRIMINATOR OUTPUT
+# INTERPOLATED PLOT
 # =====================================================
 
-print("\n==============================")
-print(" DISCRIMINATOR OUTPUT")
-print("==============================")
 
-
-output = model.predict(
-    x,
-    batch_size=BATCH_SIZE
+measured_variances = np.array(
+    measured_variances
 )
 
-
-print(
-    "percentiles:",
-    np.percentile(
-        output,
-        [0,1,25,50,75,99,100]
-    )
+mean_predictions = np.array(
+    mean_predictions
 )
 
+# sort values
 
-print(
-    "mean:",
-    output.mean()
+idx = np.argsort(
+    measured_variances
 )
 
-
-print(
-    "std:",
-    output.std()
+measured_variances = (
+    measured_variances[idx]
 )
 
+mean_predictions = (
+    mean_predictions[idx]
+)
+
+# smooth curve
+
+x_smooth = np.linspace(
+    measured_variances.min(),
+    measured_variances.max(),
+    300
+)
+
+interpolator = make_interp_spline(
+    measured_variances,
+    mean_predictions,
+    k=3
+)
+
+y_smooth = interpolator(
+    x_smooth
+)
 
 # =====================================================
-# 4. BATCH NORMALIZATION CHECK
+# PLOT
 # =====================================================
 
-print("\n==============================")
-print(" BATCH NORMALIZATION")
-print("==============================")
 
-
-for layer in model.layers:
-
-    if isinstance(layer, BatchNormalization):
-
-        gamma, beta, moving_mean, moving_var = (
-            layer.get_weights()
-        )
-
-        print("\nLayer:", layer.name)
-
-        print(
-            "gamma mean:",
-            gamma.mean()
-        )
-
-        print(
-            "moving mean:",
-            moving_mean.mean()
-        )
-
-        print(
-            "moving variance:",
-            moving_var.mean()
-        )
-
-
-# =====================================================
-# 5. TRAINING VS INFERENCE DIFFERENCE
-# =====================================================
-
-print("\n==============================")
-print(" TRAINING VS INFERENCE")
-print("==============================")
-
-
-out_training = model(
-    x,
-    training=True
+plt.figure(
+    figsize=(8, 5)
 )
 
-out_inference = model(
-    x,
-    training=False
+plt.scatter(
+    measured_variances,
+    mean_predictions,
+    label="Measured"
 )
 
-
-print(
-    "training mean:",
-    float(tf.reduce_mean(out_training))
+plt.plot(
+    x_smooth,
+    y_smooth,
+    label="Interpolated"
 )
 
-
-print(
-    "inference mean:",
-    float(tf.reduce_mean(out_inference))
+plt.xlabel(
+    "Image variance"
 )
 
+plt.ylabel(
+    "Average discriminator prediction"
+)
 
-print("\n==============================")
-print(" DONE")
-print("==============================")
+plt.title(
+    "Discriminator prediction vs image variance"
+)
+
+plt.grid(True)
+
+plt.legend()
+
+plt.tight_layout()
+
+plt.show()
+
+print("\nDONE")

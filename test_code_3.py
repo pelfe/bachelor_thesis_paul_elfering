@@ -26,7 +26,7 @@ from tensorflow.keras.layers import BatchNormalization
 
 MODEL_PATH = (
     "data/models/pauls_models/"
-    "mixed_15stacks_gan/discriminator.keras"
+    "label_smoothing_test/discriminator.keras"
 )
 
 X_PATH = (
