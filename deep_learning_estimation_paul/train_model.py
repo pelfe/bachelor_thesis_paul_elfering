@@ -505,9 +505,8 @@ def train(
 
             batch = X_realA.shape[0]
             y_real = tf.ones((batch,n_patch,n_patch,1))
-            if(label_smoothing):
-                y_real = y_real * 0.9
             y_fake = tf.zeros((batch,n_patch,n_patch,1))
+
             input_entropy_patch = tf.image.resize(input_entropy[..., None],(n_patch, n_patch), method="area")
             # --------------------------
             # Generate fake images

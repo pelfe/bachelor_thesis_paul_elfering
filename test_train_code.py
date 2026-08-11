@@ -20,13 +20,13 @@ T = 15                  # time window depth
 lambda1 = 100           # generator loss weight
 lambda2 = 0.01          # regularization weight
 alpha = 0.2             # loss balancing parameter
-learning_rate_discriminator = 0.01
+learning_rate_discriminator = 0.01 #keep them the same,discr wlr will be halved later in the code
 learning_rate_generator = 0.01
 dropout_ratio = 0.2     # dropout probability
 
 # ======================================================
 
-model_name = "label_smoothing_test"
+model_name = "test_spectralnorm"
 batch_size = 16
 train_subjects = [
     ("data/post_interpolation/healthy/npy_stacked_15/size64_subject", "ct1"),
@@ -109,7 +109,7 @@ g_model = train_model.get_unet_adapted(
     stack_count=input_shape[-1],
     conc_layers=[True,True,True,True]
 )
-d_model = discriminator_structures.define_1x1_patch_discriminator(
+d_model = discriminator_structures.define_1x1_patch_spectralnorm_discriminator(
     input_shape,
     n_filters=32,
     activation="relu",
@@ -139,6 +139,7 @@ history = train_model.train(
     generator_lr = learning_rate_generator,
     epochs=1,
     batch_size=batch_size,
+    label_smoothing=True
 )
 
 

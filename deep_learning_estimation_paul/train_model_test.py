@@ -419,6 +419,363 @@ def check_weight_change(model, before):
         np.mean(diff)
     )
 
+def gan_diagnostic_check(d_model, g_model, X_realA, X_realB):
+
+    print("\n==============================")
+    print("GAN DIAGNOSTIC CHECK")
+    print("==============================")
+
+    X_fakeB = g_model.predict_on_batch(X_realA)
+
+    batch = X_realA.shape[0]
+    n_patch = d_model.output_shape[1]
+
+    y_real = tf.ones((batch, n_patch, n_patch, 1)) * 0.9
+    y_fake = tf.zeros((batch, n_patch, n_patch, 1))
+
+    # --------------------------------------------------
+    # D outputs: training vs inference
+    # --------------------------------------------------
+
+    real_train = d_model([X_realA, X_realB], training=True)
+    fake_train = d_model([X_realA, X_fakeB], training=True)
+
+    real_infer = d_model([X_realA, X_realB], training=False)
+    fake_infer = d_model([X_realA, X_fakeB], training=False)
+
+    print("\nD OUTPUTS")
+
+    print(
+        "REAL  train:",
+        float(tf.reduce_mean(real_train)),
+        " infer:",
+        float(tf.reduce_mean(real_infer))
+    )
+
+    print(
+        "FAKE  train:",
+        float(tf.reduce_mean(fake_train)),
+        " infer:",
+        float(tf.reduce_mean(fake_infer))
+    )
+
+    print(
+        "TRAIN separation:",
+        float(tf.reduce_mean(real_train) -
+              tf.reduce_mean(fake_train))
+    )
+
+    print(
+        "INFER separation:",
+        float(tf.reduce_mean(real_infer) -
+              tf.reduce_mean(fake_infer))
+    )
+
+    # --------------------------------------------------
+    # D real/fake gradients
+    # --------------------------------------------------
+
+    with tf.GradientTape() as tape:
+
+        pred = d_model(
+            [X_realA, X_realB],
+            training=True
+        )
+
+        loss_real = tf.reduce_mean(
+            tf.keras.losses.binary_crossentropy(
+                y_real,
+                pred
+            )
+        )
+
+    grads_real = tape.gradient(
+        loss_real,
+        d_model.trainable_variables
+    )
+
+    with tf.GradientTape() as tape:
+
+        pred = d_model(
+            [X_realA, X_fakeB],
+            training=True
+        )
+
+        loss_fake = tf.reduce_mean(
+            tf.keras.losses.binary_crossentropy(
+                y_fake,
+                pred
+            )
+        )
+
+    grads_fake = tape.gradient(
+        loss_fake,
+        d_model.trainable_variables
+    )
+
+    real_norms = []
+    fake_norms = []
+    cosine_values = []
+
+    for gr, gf in zip(grads_real, grads_fake):
+
+        if gr is None or gf is None:
+            continue
+
+        gr_flat = tf.reshape(gr, [-1])
+        gf_flat = tf.reshape(gf, [-1])
+
+        real_norms.append(float(tf.norm(gr_flat)))
+        fake_norms.append(float(tf.norm(gf_flat)))
+
+        cosine = (
+            tf.reduce_sum(gr_flat * gf_flat) /
+            (tf.norm(gr_flat) * tf.norm(gf_flat) + 1e-8)
+        )
+
+        cosine_values.append(float(cosine))
+
+    print("\nD GRADIENTS")
+
+    print(
+        "Real gradient mean:",
+        np.mean(real_norms)
+    )
+
+    print(
+        "Fake gradient mean:",
+        np.mean(fake_norms)
+    )
+
+    print(
+        "Real/Fake gradient cosine:",
+        np.mean(cosine_values)
+    )
+
+    # --------------------------------------------------
+    # Generator output
+    # --------------------------------------------------
+
+    print("\nGENERATOR OUTPUT")
+
+    print("mean:", X_fakeB.mean())
+    print("std :", X_fakeB.std())
+    print("min :", X_fakeB.min())
+    print("max :", X_fakeB.max())
+
+    # --------------------------------------------------
+    # Input / target / fake statistics
+    # --------------------------------------------------
+
+    print("\nDATA STATISTICS")
+
+    print(
+        "Real A:",
+        "mean =", X_realA.mean(),
+        "std =", X_realA.std()
+    )
+
+    print(
+        "Real B:",
+        "mean =", X_realB.mean(),
+        "std =", X_realB.std()
+    )
+
+    print(
+        "Fake B:",
+        "mean =", X_fakeB.mean(),
+        "std =", X_fakeB.std()
+    )
+
+
+def diagnostic_weight_snapshot(d_model):
+
+    return [
+        w.numpy().copy()
+        for w in d_model.trainable_weights
+    ]
+
+
+def diagnostic_weight_change(d_model, before):
+
+    changes = []
+
+    for old, new in zip(
+        before,
+        d_model.trainable_weights
+    ):
+
+        changes.append(
+            np.mean(
+                np.abs(
+                    old - new.numpy()
+                )
+            )
+        )
+
+    print("\nD WEIGHT CHANGE")
+    print("mean:", np.mean(changes))
+    print("max :", np.max(changes))
+
+
+def batchnorm_batch_diagnostic(d_model, X_realA, X_realB, n_repeats=5):
+    print("\n==============================")
+    print("BATCHNORM / BATCH COMPOSITION")
+    print("==============================")
+
+    # --------------------------------------------------
+    # 1. Identify BatchNorm layers
+    # --------------------------------------------------
+    bn_layers = [
+        layer for layer in d_model.layers
+        if isinstance(layer, tf.keras.layers.BatchNormalization)
+    ]
+
+    print("\nBATCH NORMALIZATION LAYERS:", len(bn_layers))
+
+    for layer in bn_layers:
+        print(
+            layer.name,
+            "| trainable:", layer.trainable,
+            "| momentum:", layer.momentum,
+            "| moving_mean:", float(tf.reduce_mean(layer.moving_mean)),
+            "| moving_var:", float(tf.reduce_mean(layer.moving_variance))
+        )
+
+    # --------------------------------------------------
+    # 2. Same batch repeatedly
+    # --------------------------------------------------
+    print("\nSAME BATCH REPEATED")
+
+    train_outputs = []
+    infer_outputs = []
+
+    for i in range(n_repeats):
+
+        train_out = d_model(
+            [X_realA, X_realB],
+            training=True
+        )
+
+        infer_out = d_model(
+            [X_realA, X_realB],
+            training=False
+        )
+
+        train_mean = float(tf.reduce_mean(train_out))
+        infer_mean = float(tf.reduce_mean(infer_out))
+
+        train_outputs.append(train_mean)
+        infer_outputs.append(infer_mean)
+
+        print(
+            f"Run {i+1}: "
+            f"train={train_mean:.6f} "
+            f"infer={infer_mean:.6f}"
+        )
+
+    print(
+        "\nRepeated train std:",
+        np.std(train_outputs)
+    )
+
+    print(
+        "Repeated infer std:",
+        np.std(infer_outputs)
+    )
+
+    print(
+        "Train/infer difference:",
+        abs(np.mean(train_outputs) - np.mean(infer_outputs))
+    )
+
+    # --------------------------------------------------
+    # 3. Same samples, different batch composition
+    # --------------------------------------------------
+    print("\nBATCH COMPOSITION TEST")
+
+    original_train = d_model(
+        [X_realA, X_realB],
+        training=True
+    ).numpy().copy()
+
+    original_infer = d_model(
+        [X_realA, X_realB],
+        training=False
+    ).numpy().copy()
+
+    composition_differences = []
+
+    for i in range(n_repeats):
+
+        perm = np.random.permutation(len(X_realA))
+
+        shuffled_A = X_realA[perm]
+        shuffled_B = X_realB[perm]
+
+        shuffled_train = d_model(
+            [shuffled_A, shuffled_B],
+            training=True
+        ).numpy()
+
+        # Undo permutation so we compare the same samples
+        inverse_perm = np.argsort(perm)
+        shuffled_train = shuffled_train[inverse_perm]
+
+        diff = np.mean(
+            np.abs(
+                original_train - shuffled_train
+            )
+        )
+
+        composition_differences.append(diff)
+
+        print(
+            f"Shuffle {i+1}: "
+            f"mean prediction change = {diff:.6f}"
+        )
+
+    print(
+        "\nBatch-composition sensitivity:",
+        np.mean(composition_differences)
+    )
+
+    # --------------------------------------------------
+    # 4. Compare train vs inference per sample
+    # --------------------------------------------------
+    train_infer_diff = np.mean(
+        np.abs(
+            original_train - original_infer
+        )
+    )
+
+    print(
+        "\nPer-sample train/inference difference:",
+        train_infer_diff
+    )
+
+    # --------------------------------------------------
+    # Interpretation
+    # --------------------------------------------------
+    print("\nINTERPRETATION")
+
+    if train_infer_diff > 0.1:
+        print(
+            "WARNING: Large train/inference difference."
+        )
+
+    if np.mean(composition_differences) > 0.01:
+        print(
+            "WARNING: Predictions depend on batch composition."
+        )
+
+    if np.std(train_outputs) > 0.01:
+        print(
+            "WARNING: Training-mode output changes between runs."
+        )
+
+    print("==============================")
+
 
 # -------------------------------------------------------
 # Subject generator
@@ -659,6 +1016,7 @@ def train(
         batch_size=16,
         discriminator_lr = 0.001,
         generator_lr = 0.002,
+        label_smoothing = False,
         use_acgan=False):
 
     # -----------------------------
@@ -692,7 +1050,7 @@ def train(
         train_labels,
         batch_size=batch_size,
         shuffle=True,
-        augment=True
+        augment=False
     )
 
     val_generator = SubjectGenerator(
@@ -727,15 +1085,16 @@ def train(
             # Load batch
             # --------------------------
             (X_realA, X_realB, input_entropy, output_entropy, class_labels) = train_generator[step]
+            input_entropy_patch = tf.image.resize(input_entropy[..., None],(n_patch, n_patch), method="area")
 
             batch = X_realA.shape[0]
-            y_real = tf.ones((batch,n_patch,n_patch,1)) * 0.9
+            y_real = tf.ones((batch,n_patch,n_patch,1))
             y_fake = tf.zeros((batch,n_patch,n_patch,1))
-            input_entropy_patch = tf.image.resize(input_entropy[..., None],(n_patch, n_patch), method="area")
             # --------------------------
             # Generate fake images
             # --------------------------
             X_fakeB = g_model.predict_on_batch(X_realA)
+            #X_fakeB = X_realB.copy()
             # ==================================================
             # DEBUG FIRST BATCH ONLY
             # ==================================================
@@ -744,14 +1103,21 @@ def train(
             # ONE TIME DISCRIMINATOR DEBUG
             # ==================================================
 
-            if step%1000 == 0:
+            if step % 500 == 0:
+                print("\n\n##############################")
+                print("DIAGNOSTIC AT STEP", step)
+                print("##############################")
+
+                # Snapshot D BEFORE the next D updates
+                d_weights_before = diagnostic_weight_snapshot(d_model)
+
                 check_gan_freeze(
                     g_model,
                     d_model,
                     gan_model
                 )
 
-                discriminator_health_check(
+                gan_diagnostic_check(
                     d_model,
                     g_model,
                     X_realA,
@@ -764,12 +1130,10 @@ def train(
                     X_realB
                 )
 
-                fake = g_model.predict_on_batch(X_realA)
-
-                print("\nGENERATOR COLLAPSE CHECK")
-                print(
-                    "std:",
-                    fake.std()
+                batchnorm_batch_diagnostic(
+                    d_model,
+                    X_realA,
+                    X_realB
                 )
 
             # --------------------------
@@ -782,7 +1146,6 @@ def train(
                     [y_real, class_labels]
                 )
             else:
-
 
                 d_loss_real = d_model.train_on_batch(
                     [X_realA, X_realB],
@@ -803,6 +1166,11 @@ def train(
                 d_loss_fake = d_model.train_on_batch(
                     [X_realA, X_fakeB],
                     y_fake
+                )
+            if step % 500 == 0:
+                diagnostic_weight_change(
+                    d_model,
+                    d_weights_before
                 )
 
             # --------------------------
